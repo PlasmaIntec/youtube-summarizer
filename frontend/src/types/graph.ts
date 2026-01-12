@@ -1,122 +1,49 @@
-export type NodeRole =
-  | "claim"
-  | "definition"
-  | "transformation"
-  | "constraint"
-  | "assumption"
-  | "example"
-  | "counterpoint"
-  | "procedure"
-  | "result";
+/**
+ * RUTHLESS Graph Types.
+ * Minimal schema - no elegance theater.
+ */
 
-export type NodeLayer = "L1_core" | "L2_support" | "L3_detail";
+export type NodeLayer = "L1" | "L2" | "L3";
 
-export type EdgeType =
-  | "explains"
-  | "depends_on"
-  | "generalizes"
-  | "specializes"
-  | "instantiates"
-  | "contrasts"
-  | "qualifies"
-  | "leads_to"
-  | "supports";
+// Only 3 edge types allowed
+export type EdgeType = "explains" | "depends_on" | "qualifies";
 
-export type DisplayHint = "emphasized" | "default" | "collapsed";
-
-export type IconType = "none" | "star" | "warning" | "info";
+// Discrete values only
+export type Density = 0.2 | 0.5 | 0.8;
+export type Confidence = 0.3 | 0.6 | 0.9;
+export type EdgeWeight = 0.3 | 0.6 | 0.9;
 
 export interface TimeSpan {
   t0: number;
   t1: number;
 }
 
-export interface TranscriptQuote {
-  t0: number;
-  t1: number;
-  quote: string;
-}
-
-export interface NodeAnchors {
-  transcript_quotes: TranscriptQuote[];
-}
-
-export interface NodeUI {
-  display_hint: DisplayHint;
-  icon: IconType;
+export interface GraphNode {
+  id: string;
+  statement: string;
+  layer: NodeLayer;
+  density: number; // 0.2 | 0.5 | 0.8
+  confidence: number; // 0.3 | 0.6 | 0.9
+  time_spans: TimeSpan[];
   tags: string[];
 }
 
-export interface GraphNode {
-  id: string;
-  label: string;
-  statement: string;
-  role: NodeRole;
-  layer: NodeLayer;
-  time_spans: TimeSpan[];
-  semantic_density: number;
-  confidence: number;
-  novelty: number;
-  compression_notes: string[];
-  keywords: string[];
-  anchors: NodeAnchors;
-  ui: NodeUI;
-}
-
-export interface EdgeUI {
-  style: "solid" | "dashed";
-  curvature: number;
-}
-
 export interface GraphEdge {
-  id: string;
   source: string;
   target: string;
   type: EdgeType;
-  dependency_weight: number;
-  evidence: TimeSpan[];
-  ui: EdgeUI;
-}
-
-export interface GraphCluster {
-  id: string;
-  label: string;
-  node_ids: string[];
-  time_span: TimeSpan;
-  summary: string;
-}
-
-export interface TranscriptCoverage {
-  t0: number;
-  t1: number;
+  weight: number; // 0.3 | 0.6 | 0.9
 }
 
 export interface GraphMeta {
   title: string;
-  source: string;
-  language: string;
-  transcript_coverage: TranscriptCoverage;
-  notes: string[];
-}
-
-export interface ViewConfig {
-  node_size: string;
-  node_opacity: string;
-  edge_width: string;
-  time_highlight: boolean;
-}
-
-export interface GraphViews {
-  default: ViewConfig;
+  duration_seconds: number;
 }
 
 export interface GraphOutput {
-  version: string;
-  meta: GraphMeta;
   nodes: GraphNode[];
   edges: GraphEdge[];
-  clusters: GraphCluster[];
-  views: GraphViews;
+  meta: GraphMeta;
 }
 
 export interface TranscriptSegment {

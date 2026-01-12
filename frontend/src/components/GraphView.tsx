@@ -1,37 +1,42 @@
+/**
+ * RUTHLESS GraphView.
+ * Click nodes to expand. Size = density. Opacity = confidence.
+ */
 import { useEffect, useRef, useCallback } from "react";
 import * as d3 from "d3";
-import type { GraphOutput, GraphNode, NodeLayer } from "../types/graph";
+import type { GraphOutput, GraphNode } from "../types/graph";
 import {
   transformToD3Data,
   createForceSimulation,
   setupZoom,
-  setupDrag,
   getNodeRadius,
   getNodeColor,
   getNodeOpacity,
   getLinkWidth,
   getLinkColor,
-  getLinkStyle,
 } from "../utils/d3-graph";
-import type { D3Node, D3Link } from "../utils/d3-graph";
+import type { D3Node } from "../utils/d3-graph";
 
 interface GraphViewProps {
   graph: GraphOutput;
+  fullGraph: GraphOutput;
   selectedNodeId: string | null;
-  onNodeSelect: (node: GraphNode | null) => void;
-  visibleLayers: Set<NodeLayer>;
+  expandedNodeIds: Set<string>;
+  onNodeClick: (node: GraphNode) => void;
+  onBackgroundClick: () => void;
   highlightedTimeRange: { t0: number; t1: number } | null;
 }
 
 export function GraphView({
   graph,
+  fullGraph,
   selectedNodeId,
-  onNodeSelect,
-  visibleLayers,
+  expandedNodeIds,
+  onNodeClick,
+  onBackgroundClick,
   highlightedTimeRange,
 }: GraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  const simulationRef = useRef<d3.Simulation<D3Node, D3Link> | null>(null);
 
   const isNodeInTimeRange = useCallback(
     (node: GraphNode) => {
@@ -45,6 +50,22 @@ export function GraphView({
     [highlightedTimeRange]
   );
 
+  // Check if node has unexpanded neighbors
+  const hasUnexpandedNeighbors = useCallback(
+    (nodeId: string) => {
+      for (const edge of fullGraph.edges) {
+        if (edge.source === nodeId && !expandedNodeIds.has(edge.target)) {
+          return true;
+        }
+        if (edge.target === nodeId && !expandedNodeIds.has(edge.source)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [fullGraph.edges, expandedNodeIds]
+  );
+
   useEffect(() => {
     if (!svgRef.current || graph.nodes.length === 0) return;
 
@@ -54,31 +75,26 @@ export function GraphView({
 
     svg.selectAll("*").remove();
 
-    const filteredNodes = graph.nodes.filter((n) => visibleLayers.has(n.layer));
-    const filteredNodeIds = new Set(filteredNodes.map((n) => n.id));
-    const filteredEdges = graph.edges.filter(
-      (e) => filteredNodeIds.has(e.source) && filteredNodeIds.has(e.target)
-    );
-
-    const { d3Nodes, d3Links } = transformToD3Data(filteredNodes, filteredEdges);
-
+    const { d3Nodes, d3Links } = transformToD3Data(graph.nodes, graph.edges);
     const g = svg.append("g");
 
     setupZoom(svg, g, width, height);
+    createForceSimulation(d3Nodes, d3Links, width / 2, height / 2);
 
-    const simulation = createForceSimulation(d3Nodes, d3Links, width / 2, height / 2);
-    simulationRef.current = simulation;
-
-    const link = g
-      .append("g")
+    // Render links
+    g.append("g")
       .attr("class", "links")
       .selectAll("line")
       .data(d3Links)
       .join("line")
       .attr("stroke", (d) => getLinkColor(d.data))
       .attr("stroke-width", (d) => getLinkWidth(d.data))
-      .attr("stroke-dasharray", (d) => getLinkStyle(d.data));
+      .attr("x1", (d) => (d.source as D3Node).x!)
+      .attr("y1", (d) => (d.source as D3Node).y!)
+      .attr("x2", (d) => (d.target as D3Node).x!)
+      .attr("y2", (d) => (d.target as D3Node).y!);
 
+    // Render nodes
     const node = g
       .append("g")
       .attr("class", "nodes")
@@ -86,8 +102,9 @@ export function GraphView({
       .data(d3Nodes)
       .join("g")
       .attr("cursor", "pointer")
-      .call(setupDrag(simulation) as any);
+      .attr("transform", (d) => `translate(${d.x},${d.y})`);
 
+    // Node circles
     node
       .append("circle")
       .attr("r", (d) => getNodeRadius(d.data))
@@ -102,51 +119,63 @@ export function GraphView({
       )
       .attr("stroke-width", 3);
 
+    // Expansion indicator (+ sign for nodes with hidden neighbors)
+    node
+      .filter((d) => hasUnexpandedNeighbors(d.id))
+      .append("text")
+      .text("+")
+      .attr("text-anchor", "middle")
+      .attr("dominant-baseline", "central")
+      .attr("font-size", (d) => getNodeRadius(d.data) * 0.8)
+      .attr("font-weight", "bold")
+      .attr("fill", "#fff")
+      .attr("pointer-events", "none");
+
+    // Statement as label (truncated)
     node
       .append("text")
-      .text((d) => d.data.label)
-      .attr("x", (d) => getNodeRadius(d.data) + 4)
+      .text((d) => {
+        const stmt = d.data.statement;
+        return stmt.length > 30 ? stmt.slice(0, 30) + "…" : stmt;
+      })
+      .attr("x", (d) => getNodeRadius(d.data) + 6)
       .attr("y", 4)
-      .attr("font-size", "12px")
+      .attr("font-size", "11px")
       .attr("fill", "#e5e7eb")
-      .attr("opacity", (d) => (isNodeInTimeRange(d.data) ? 1 : 0.3));
+      .attr("opacity", (d) => (isNodeInTimeRange(d.data) ? 0.9 : 0.3));
 
+    // Tooltip
     node
       .append("title")
       .text(
         (d) =>
-          `${d.data.label}\n${d.data.statement}\nDensity: ${d.data.semantic_density.toFixed(2)}\nConfidence: ${d.data.confidence.toFixed(2)}`
+          `${d.data.statement}\n\nLayer: ${d.data.layer}\nDensity: ${d.data.density}\nConfidence: ${d.data.confidence}\nTags: ${d.data.tags.join(", ") || "none"}`
       );
 
+    // Click handler
     node.on("click", (event, d) => {
       event.stopPropagation();
-      onNodeSelect(d.data);
+      onNodeClick(d.data);
     });
 
+    // Background click
     svg.on("click", () => {
-      onNodeSelect(null);
+      onBackgroundClick();
     });
+  }, [
+    graph,
+    selectedNodeId,
+    onNodeClick,
+    onBackgroundClick,
+    isNodeInTimeRange,
+    hasUnexpandedNeighbors,
+  ]);
 
-    simulation.on("tick", () => {
-      link
-        .attr("x1", (d) => (d.source as D3Node).x!)
-        .attr("y1", (d) => (d.source as D3Node).y!)
-        .attr("x2", (d) => (d.target as D3Node).x!)
-        .attr("y2", (d) => (d.target as D3Node).y!);
-
-      node.attr("transform", (d) => `translate(${d.x},${d.y})`);
-    });
-
-    return () => {
-      simulation.stop();
-    };
-  }, [graph, visibleLayers, selectedNodeId, onNodeSelect, isNodeInTimeRange]);
-
+  // Update selection highlight without full redraw
   useEffect(() => {
     if (!svgRef.current) return;
 
     const svg = d3.select(svgRef.current);
-
     svg.selectAll(".nodes circle").attr("stroke", function () {
       const d = d3.select(this.parentNode).datum() as D3Node;
       return d.id === selectedNodeId ? "#fff" : "transparent";
@@ -159,7 +188,7 @@ export function GraphView({
       style={{
         width: "100%",
         height: "100%",
-        background: "#1f2937",
+        background: "#111827",
       }}
     />
   );

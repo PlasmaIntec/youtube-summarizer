@@ -1,3 +1,7 @@
+/**
+ * RUTHLESS D3 Graph Utils.
+ * Node size = density. Node opacity = confidence.
+ */
 import * as d3 from "d3";
 import type { GraphNode, GraphEdge, NodeLayer } from "../types/graph";
 
@@ -7,50 +11,64 @@ export interface D3Node extends d3.SimulationNodeDatum {
 }
 
 export interface D3Link extends d3.SimulationLinkDatum<D3Node> {
-  id: string;
   data: GraphEdge;
 }
 
+// Layer colors: L1 = purple (core), L2 = green (support), L3 = amber (detail)
 const LAYER_COLORS: Record<NodeLayer, string> = {
-  L1_core: "#6366f1",
-  L2_support: "#22c55e",
-  L3_detail: "#f59e0b",
+  L1: "#8b5cf6",
+  L2: "#22c55e",
+  L3: "#f59e0b",
 };
 
-const MIN_NODE_RADIUS = 8;
-const MAX_NODE_RADIUS = 32;
-const MIN_LINK_WIDTH = 1;
-const MAX_LINK_WIDTH = 6;
+// Size based on density
+const DENSITY_RADIUS: Record<number, number> = {
+  0.2: 12,
+  0.5: 20,
+  0.8: 32,
+};
+
+// Edge width based on weight
+const WEIGHT_WIDTH: Record<number, number> = {
+  0.3: 1,
+  0.6: 2,
+  0.9: 4,
+};
 
 export function createForceSimulation(
   nodes: D3Node[],
   links: D3Link[],
-  width: number,
-  height: number
+  centerX: number,
+  centerY: number
 ) {
-  return d3
+  const simulation = d3
     .forceSimulation(nodes)
     .force(
       "link",
       d3
         .forceLink<D3Node, D3Link>(links)
         .id((d) => d.id)
-        .distance(100)
-        .strength((d) => d.data.dependency_weight * 0.5)
+        .distance(120)
+        .strength((d) => d.data.weight * 0.3)
     )
-    .force("charge", d3.forceManyBody().strength(-300))
-    .force("center", d3.forceCenter(width / 2, height / 2))
+    .force("charge", d3.forceManyBody().strength(-400))
+    .force("center", d3.forceCenter(centerX, centerY))
     .force(
       "collision",
-      d3.forceCollide<D3Node>().radius((d) => getNodeRadius(d.data) + 5)
+      d3.forceCollide<D3Node>().radius((d) => getNodeRadius(d.data) + 10)
     );
+
+  // Run to completion
+  simulation.stop();
+  for (let i = 0; i < 300; i++) {
+    simulation.tick();
+  }
+
+  return simulation;
 }
 
 export function getNodeRadius(node: GraphNode): number {
-  return (
-    MIN_NODE_RADIUS +
-    node.semantic_density * (MAX_NODE_RADIUS - MIN_NODE_RADIUS)
-  );
+  return DENSITY_RADIUS[node.density] ?? 16;
 }
 
 export function getNodeColor(node: GraphNode): string {
@@ -58,22 +76,17 @@ export function getNodeColor(node: GraphNode): string {
 }
 
 export function getNodeOpacity(node: GraphNode): number {
+  // Confidence: 0.3 → 0.4, 0.6 → 0.7, 0.9 → 1.0
   return 0.3 + node.confidence * 0.7;
 }
 
 export function getLinkWidth(edge: GraphEdge): number {
-  return (
-    MIN_LINK_WIDTH + edge.dependency_weight * (MAX_LINK_WIDTH - MIN_LINK_WIDTH)
-  );
+  return WEIGHT_WIDTH[edge.weight] ?? 2;
 }
 
 export function getLinkColor(edge: GraphEdge): string {
-  const opacity = 0.3 + edge.dependency_weight * 0.5;
-  return `rgba(100, 100, 100, ${opacity})`;
-}
-
-export function getLinkStyle(edge: GraphEdge): string {
-  return edge.ui.style === "dashed" ? "4,4" : "none";
+  const opacity = 0.3 + edge.weight * 0.4;
+  return `rgba(150, 150, 150, ${opacity})`;
 }
 
 export function transformToD3Data(
@@ -90,7 +103,6 @@ export function transformToD3Data(
   const d3Links: D3Link[] = edges
     .filter((edge) => nodeMap.has(edge.source) && nodeMap.has(edge.target))
     .map((edge) => ({
-      id: edge.id,
       source: edge.source,
       target: edge.target,
       data: edge,
@@ -107,50 +119,18 @@ export function setupZoom(
 ) {
   const zoom = d3
     .zoom<SVGSVGElement, unknown>()
-    .scaleExtent([0.1, 4])
+    .scaleExtent([0.2, 3])
     .on("zoom", (event) => {
       g.attr("transform", event.transform);
     });
 
   svg.call(zoom);
 
+  // Initial transform to center
   svg.call(
     zoom.transform,
-    d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8)
+    d3.zoomIdentity.translate(width / 2, height / 2).scale(0.7)
   );
 
   return zoom;
-}
-
-export function setupDrag(
-  simulation: d3.Simulation<D3Node, D3Link>
-): d3.DragBehavior<Element, D3Node, D3Node | d3.SubjectPosition> {
-  function dragstarted(
-    event: d3.D3DragEvent<Element, D3Node, D3Node>,
-    d: D3Node
-  ) {
-    if (!event.active) simulation.alphaTarget(0.3).restart();
-    d.fx = d.x;
-    d.fy = d.y;
-  }
-
-  function dragged(event: d3.D3DragEvent<Element, D3Node, D3Node>, d: D3Node) {
-    d.fx = event.x;
-    d.fy = event.y;
-  }
-
-  function dragended(
-    event: d3.D3DragEvent<Element, D3Node, D3Node>,
-    d: D3Node
-  ) {
-    if (!event.active) simulation.alphaTarget(0);
-    d.fx = null;
-    d.fy = null;
-  }
-
-  return d3
-    .drag<Element, D3Node>()
-    .on("start", dragstarted)
-    .on("drag", dragged)
-    .on("end", dragended);
 }

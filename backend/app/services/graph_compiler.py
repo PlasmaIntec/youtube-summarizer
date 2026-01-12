@@ -1,3 +1,7 @@
+"""
+RUTHLESS Graph Compiler.
+Converts transcript → validated information graph.
+"""
 import json
 import os
 from anthropic import Anthropic
@@ -6,6 +10,7 @@ from dotenv import load_dotenv
 from app.models.transcript import TranscriptInput
 from app.models.graph import GraphOutput
 from app.prompts.compiler import SYSTEM_PROMPT
+from app.services.validator import validate_or_raise, ValidationError
 
 load_dotenv()
 
@@ -20,7 +25,7 @@ class GraphCompiler:
 
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=16000,
+            max_tokens=8000,
             system=SYSTEM_PROMPT,
             messages=[
                 {"role": "user", "content": user_message}
@@ -30,7 +35,11 @@ class GraphCompiler:
         response_text = response.content[0].text
         graph_json = self._extract_json(response_text)
 
-        return GraphOutput.model_validate(graph_json)
+        # Parse and validate ruthlessly
+        output = GraphOutput.model_validate(graph_json)
+        validate_or_raise(output)
+
+        return output
 
     def _build_user_message(self, input_data: TranscriptInput) -> str:
         transcript_data = {

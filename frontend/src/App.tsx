@@ -1,58 +1,31 @@
+/**
+ * RUTHLESS App.
+ * L1 only on load. Click → expand neighbors.
+ */
 import { useState, useCallback } from "react";
 import { TranscriptInput } from "./components/TranscriptInput";
 import { GraphView } from "./components/GraphView";
 import { NodeInspector } from "./components/NodeInspector";
-import { LayerControls } from "./components/LayerControls";
 import { Timeline } from "./components/Timeline";
 import { compileTranscript } from "./services/api";
 import type {
   TranscriptInput as TranscriptInputType,
   GraphOutput,
   GraphNode,
-  NodeLayer,
-  EdgeType,
-  NodeRole,
 } from "./types/graph";
 import "./App.css";
-
-const ALL_LAYERS: NodeLayer[] = ["L1_core", "L2_support", "L3_detail"];
-const ALL_EDGE_TYPES: EdgeType[] = [
-  "explains",
-  "depends_on",
-  "generalizes",
-  "specializes",
-  "instantiates",
-  "contrasts",
-  "qualifies",
-  "leads_to",
-  "supports",
-];
-const ALL_ROLES: NodeRole[] = [
-  "claim",
-  "definition",
-  "transformation",
-  "constraint",
-  "assumption",
-  "example",
-  "counterpoint",
-  "procedure",
-  "result",
-];
 
 function App() {
   const [graph, setGraph] = useState<GraphOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [visibleLayers, setVisibleLayers] = useState<Set<NodeLayer>>(
-    new Set(ALL_LAYERS)
+
+  // Expanded nodes: starts with L1 only, expands on click
+  const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
+    new Set()
   );
-  const [visibleEdgeTypes, setVisibleEdgeTypes] = useState<Set<EdgeType>>(
-    new Set(ALL_EDGE_TYPES)
-  );
-  const [visibleRoles, setVisibleRoles] = useState<Set<NodeRole>>(
-    new Set(ALL_ROLES)
-  );
+
   const [highlightedTimeRange, setHighlightedTimeRange] = useState<{
     t0: number;
     t1: number;
@@ -63,10 +36,17 @@ function App() {
     setError(null);
     setGraph(null);
     setSelectedNode(null);
+    setExpandedNodeIds(new Set());
 
     try {
       const result = await compileTranscript(input);
       setGraph(result);
+
+      // Start with L1 nodes expanded (visible)
+      const l1Ids = new Set(
+        result.nodes.filter((n) => n.layer === "L1").map((n) => n.id)
+      );
+      setExpandedNodeIds(l1Ids);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to compile transcript"
@@ -76,80 +56,90 @@ function App() {
     }
   };
 
-  const handleNodeSelect = useCallback((node: GraphNode | null) => {
-    setSelectedNode(node);
-  }, []);
+  // Click node → expand its neighbors
+  const handleNodeClick = useCallback(
+    (node: GraphNode) => {
+      setSelectedNode(node);
 
-  const handleLayerToggle = useCallback((layer: NodeLayer) => {
-    setVisibleLayers((prev) => {
-      const next = new Set(prev);
-      if (next.has(layer)) {
-        next.delete(layer);
-      } else {
-        next.add(layer);
+      if (!graph) return;
+
+      // Find all neighbors of clicked node
+      const neighborIds = new Set<string>();
+      for (const edge of graph.edges) {
+        if (edge.source === node.id) {
+          neighborIds.add(edge.target);
+        }
+        if (edge.target === node.id) {
+          neighborIds.add(edge.source);
+        }
       }
-      return next;
-    });
+
+      // Expand neighbors
+      setExpandedNodeIds((prev) => {
+        const next = new Set(prev);
+        next.add(node.id);
+        neighborIds.forEach((id) => next.add(id));
+        return next;
+      });
+    },
+    [graph]
+  );
+
+  const handleBackgroundClick = useCallback(() => {
+    setSelectedNode(null);
   }, []);
 
-  const handleEdgeTypeToggle = useCallback((type: EdgeType) => {
-    setVisibleEdgeTypes((prev) => {
-      const next = new Set(prev);
-      if (next.has(type)) {
-        next.delete(type);
-      } else {
-        next.add(type);
-      }
-      return next;
-    });
-  }, []);
+  // Reset to L1 only
+  const handleReset = useCallback(() => {
+    if (!graph) return;
+    const l1Ids = new Set(
+      graph.nodes.filter((n) => n.layer === "L1").map((n) => n.id)
+    );
+    setExpandedNodeIds(l1Ids);
+    setSelectedNode(null);
+  }, [graph]);
 
-  const handleRoleToggle = useCallback((role: NodeRole) => {
-    setVisibleRoles((prev) => {
-      const next = new Set(prev);
-      if (next.has(role)) {
-        next.delete(role);
-      } else {
-        next.add(role);
-      }
-      return next;
-    });
-  }, []);
+  // Expand all
+  const handleExpandAll = useCallback(() => {
+    if (!graph) return;
+    setExpandedNodeIds(new Set(graph.nodes.map((n) => n.id)));
+  }, [graph]);
 
-  const filteredNodes = graph
-    ? graph.nodes.filter(
-        (n) => visibleLayers.has(n.layer) && visibleRoles.has(n.role)
-      )
+  // Visible nodes = expanded nodes only
+  const visibleNodes = graph
+    ? graph.nodes.filter((n) => expandedNodeIds.has(n.id))
     : [];
 
-  const filteredNodeIds = new Set(filteredNodes.map((n) => n.id));
+  const visibleNodeIds = new Set(visibleNodes.map((n) => n.id));
 
-  const filteredEdges = graph
+  const visibleEdges = graph
     ? graph.edges.filter(
-        (e) =>
-          filteredNodeIds.has(e.source) &&
-          filteredNodeIds.has(e.target) &&
-          visibleEdgeTypes.has(e.type)
+        (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)
       )
     : [];
 
-  const filteredGraph: GraphOutput | null = graph
+  const visibleGraph: GraphOutput | null = graph
     ? {
         ...graph,
-        nodes: filteredNodes,
-        edges: filteredEdges,
+        nodes: visibleNodes,
+        edges: visibleEdges,
       }
     : null;
+
+  const l1Count = graph?.nodes.filter((n) => n.layer === "L1").length ?? 0;
+  const l2Count = graph?.nodes.filter((n) => n.layer === "L2").length ?? 0;
+  const l3Count = graph?.nodes.filter((n) => n.layer === "L3").length ?? 0;
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Transcript Graph Compiler</h1>
+        <h1>RUTHLESS Graph Compiler</h1>
         {graph && (
           <div className="graph-stats">
-            <span>{graph.nodes.length} nodes</span>
-            <span>{graph.edges.length} edges</span>
-            <span>{graph.clusters.length} clusters</span>
+            <span>L1: {l1Count}</span>
+            <span>L2: {l2Count}</span>
+            <span>L3: {l3Count}</span>
+            <span>Visible: {visibleNodes.length}</span>
           </div>
         )}
       </header>
@@ -162,33 +152,34 @@ function App() {
           </div>
         )}
 
-        {graph && filteredGraph && (
+        {graph && visibleGraph && (
           <>
             <aside className="controls-panel">
               <button className="new-btn" onClick={() => setGraph(null)}>
                 New Transcript
               </button>
-              <LayerControls
-                visibleLayers={visibleLayers}
-                onLayerToggle={handleLayerToggle}
-                visibleEdgeTypes={visibleEdgeTypes}
-                onEdgeTypeToggle={handleEdgeTypeToggle}
-                visibleRoles={visibleRoles}
-                onRoleToggle={handleRoleToggle}
-              />
+              <button className="reset-btn" onClick={handleReset}>
+                Reset to L1
+              </button>
+              <button className="expand-btn" onClick={handleExpandAll}>
+                Expand All
+              </button>
+              <div className="hint">Click nodes to expand neighbors</div>
             </aside>
 
             <div className="graph-panel">
               <GraphView
-                graph={filteredGraph}
+                graph={visibleGraph}
+                fullGraph={graph}
                 selectedNodeId={selectedNode?.id ?? null}
-                onNodeSelect={handleNodeSelect}
-                visibleLayers={visibleLayers}
+                expandedNodeIds={expandedNodeIds}
+                onNodeClick={handleNodeClick}
+                onBackgroundClick={handleBackgroundClick}
                 highlightedTimeRange={highlightedTimeRange}
               />
               <Timeline
                 nodes={graph.nodes}
-                coverage={graph.meta.transcript_coverage}
+                duration={graph.meta.duration_seconds}
                 highlightedRange={highlightedTimeRange}
                 onRangeChange={setHighlightedTimeRange}
               />
@@ -199,7 +190,8 @@ function App() {
                 node={selectedNode}
                 edges={graph.edges}
                 nodes={graph.nodes}
-                onNodeSelect={handleNodeSelect}
+                expandedNodeIds={expandedNodeIds}
+                onNodeClick={handleNodeClick}
               />
             </aside>
           </>

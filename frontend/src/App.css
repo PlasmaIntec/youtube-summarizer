@@ -111,6 +111,11 @@
   font-size: 1.125rem;
 }
 
+.example-buttons {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .example-btn {
   padding: 0.5rem 1rem;
   background: var(--bg-tertiary);
@@ -118,11 +123,21 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
 }
 
 .example-btn:hover {
   background: var(--border-color);
+}
+
+.example-btn.complex {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  color: #c4b5fd;
+}
+
+.example-btn.complex:hover {
+  background: rgba(139, 92, 246, 0.3);
 }
 
 .transcript-input textarea {

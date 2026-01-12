@@ -115,7 +115,8 @@ export function setupZoom(
   svg: d3.Selection<SVGSVGElement, unknown, null, undefined>,
   g: d3.Selection<SVGGElement, unknown, null, undefined>,
   width: number,
-  height: number
+  height: number,
+  initialTransform?: d3.ZoomTransform
 ) {
   const zoom = d3
     .zoom<SVGSVGElement, unknown>()
@@ -126,11 +127,19 @@ export function setupZoom(
 
   svg.call(zoom);
 
-  // Initial transform to center
-  svg.call(
-    zoom.transform,
-    d3.zoomIdentity.translate(width / 2, height / 2).scale(0.7)
-  );
+  // Use provided transform or default to center
+  const transform = initialTransform || d3.zoomIdentity.translate(width / 2, height / 2).scale(0.7);
+  svg.call(zoom.transform, transform);
 
   return zoom;
+}
+
+export function getCurrentTransform(
+  svg: d3.Selection<SVGSVGElement, unknown, null, undefined>
+): d3.ZoomTransform | undefined {
+  try {
+    return d3.zoomTransform(svg.node()!);
+  } catch {
+    return undefined;
+  }
 }

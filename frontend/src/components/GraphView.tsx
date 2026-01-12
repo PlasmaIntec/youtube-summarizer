@@ -1,6 +1,7 @@
 /**
  * RUTHLESS GraphView.
  * Click nodes to expand. Size = density. Opacity = confidence.
+ * Preserves view position on updates.
  */
 import { useEffect, useRef, useCallback } from "react";
 import * as d3 from "d3";
@@ -9,6 +10,7 @@ import {
   transformToD3Data,
   createForceSimulation,
   setupZoom,
+  getCurrentTransform,
   getNodeRadius,
   getNodeColor,
   getNodeOpacity,
@@ -37,6 +39,12 @@ export function GraphView({
   highlightedTimeRange,
 }: GraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  // Preserve node positions between renders
+  const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(
+    new Map()
+  );
+  // Track if this is first render
+  const isFirstRenderRef = useRef(true);
 
   const isNodeInTimeRange = useCallback(
     (node: GraphNode) => {
@@ -73,13 +81,40 @@ export function GraphView({
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
 
+    // Preserve current transform before clearing
+    const currentTransform = getCurrentTransform(svg);
+
     svg.selectAll("*").remove();
 
     const { d3Nodes, d3Links } = transformToD3Data(graph.nodes, graph.edges);
+
+    // Restore positions for existing nodes
+    d3Nodes.forEach((node) => {
+      const savedPos = nodePositionsRef.current.get(node.id);
+      if (savedPos) {
+        node.x = savedPos.x;
+        node.y = savedPos.y;
+        node.fx = savedPos.x; // Fix position
+        node.fy = savedPos.y;
+      }
+    });
+
     const g = svg.append("g");
 
-    setupZoom(svg, g, width, height);
+    // Only use default transform on first render
+    const transform = isFirstRenderRef.current ? undefined : currentTransform;
+    setupZoom(svg, g, width, height, transform);
+    isFirstRenderRef.current = false;
+
+    // Run simulation (will respect fixed positions)
     createForceSimulation(d3Nodes, d3Links, width / 2, height / 2);
+
+    // Save positions after simulation
+    d3Nodes.forEach((node) => {
+      if (node.x !== undefined && node.y !== undefined) {
+        nodePositionsRef.current.set(node.id, { x: node.x, y: node.y });
+      }
+    });
 
     // Render links
     g.append("g")

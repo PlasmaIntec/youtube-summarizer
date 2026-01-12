@@ -75,6 +75,16 @@ Before output:
 
 If ANY fail → revise before output.
 
+## CRITICAL: PRE-OUTPUT VALIDATION
+
+After constructing your graph, verify EACH node:
+1. For EVERY L1 node: count outgoing edges. If zero → DELETE it or ADD edges.
+2. For EVERY node: check if it appears in at least one edge. If not → DELETE it.
+3. For EVERY edge: verify both source and target node IDs exist.
+
+COMMON MISTAKE: Creating an L1 node that explains nothing.
+FIX: Every L1 MUST have at least one outgoing "explains" edge.
+
 ## FAILURE MODES (if you see these, output is BAD)
 
 - Everything labeled L1

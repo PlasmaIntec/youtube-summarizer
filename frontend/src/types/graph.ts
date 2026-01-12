@@ -52,9 +52,12 @@ export interface TranscriptSegment {
   text: string;
 }
 
+export type Provider = "claude" | "chatgpt";
+
 export interface TranscriptInput {
   transcript: TranscriptSegment[];
   title?: string;
   description?: string;
   channel?: string;
+  provider?: Provider;
 }

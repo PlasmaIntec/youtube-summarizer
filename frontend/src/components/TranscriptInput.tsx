@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { TranscriptInput as TranscriptInputType } from "../types/graph";
+import type { TranscriptInput as TranscriptInputType, Provider } from "../types/graph";
 
 interface TranscriptInputProps {
   onSubmit: (input: TranscriptInputType) => void;
@@ -52,6 +52,7 @@ const EXAMPLE_COMPLEX = `{
 export function TranscriptInput({ onSubmit, isLoading }: TranscriptInputProps) {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [provider, setProvider] = useState<Provider>("claude");
 
   const handleSubmit = () => {
     setError(null);
@@ -75,7 +76,7 @@ export function TranscriptInput({ onSubmit, isLoading }: TranscriptInputProps) {
         }
       }
 
-      onSubmit(parsed);
+      onSubmit({ ...parsed, provider });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid JSON");
     }
@@ -122,18 +123,36 @@ Format:
 
       {error && <div className="error-message">{error}</div>}
 
+      <div className="provider-selector">
+        <span className="provider-label">Model:</span>
+        <button
+          className={`provider-btn ${provider === "claude" ? "active" : ""}`}
+          onClick={() => setProvider("claude")}
+          disabled={isLoading}
+        >
+          Claude
+        </button>
+        <button
+          className={`provider-btn ${provider === "chatgpt" ? "active" : ""}`}
+          onClick={() => setProvider("chatgpt")}
+          disabled={isLoading}
+        >
+          ChatGPT
+        </button>
+      </div>
+
       <button
         className="submit-btn"
         onClick={handleSubmit}
         disabled={isLoading || !input.trim()}
       >
-        {isLoading ? "Compiling..." : "Compile Graph"}
+        {isLoading ? "Compiling..." : `Compile with ${provider === "claude" ? "Claude" : "ChatGPT"}`}
       </button>
 
       {isLoading && (
         <div className="loading-indicator">
           <div className="spinner" />
-          <p>Processing transcript with Claude...</p>
+          <p>Processing transcript with {provider === "claude" ? "Claude" : "ChatGPT"}...</p>
         </div>
       )}
     </div>

@@ -172,6 +172,44 @@
   font-size: 0.875rem;
 }
 
+.provider-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.provider-label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.provider-btn {
+  padding: 0.5rem 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.provider-btn:hover:not(:disabled) {
+  background: var(--border-color);
+}
+
+.provider-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.provider-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .submit-btn {
   width: 100%;
   margin-top: 1rem;

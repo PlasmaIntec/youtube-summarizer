@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 
 
 class TranscriptSegment(BaseModel):
@@ -13,3 +13,4 @@ class TranscriptInput(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     channel: Optional[str] = None
+    provider: Literal["claude", "chatgpt"] = "claude"

@@ -7,9 +7,10 @@ import { TranscriptInput } from "./components/TranscriptInput";
 import { GraphView } from "./components/GraphView";
 import { NodeInspector } from "./components/NodeInspector";
 import { Timeline } from "./components/Timeline";
-import { compileTranscript } from "./services/api";
+import { compileTranscript, compileFromUrl } from "./services/api";
 import type {
   TranscriptInput as TranscriptInputType,
+  YouTubeURLInput,
   GraphOutput,
   GraphNode,
 } from "./types/graph";
@@ -50,6 +51,31 @@ function App() {
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to compile transcript"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmitUrl = async (input: YouTubeURLInput) => {
+    setIsLoading(true);
+    setError(null);
+    setGraph(null);
+    setSelectedNode(null);
+    setExpandedNodeIds(new Set());
+
+    try {
+      const result = await compileFromUrl(input);
+      setGraph(result);
+
+      // Start with L1 nodes expanded (visible)
+      const l1Ids = new Set(
+        result.nodes.filter((n) => n.layer === "L1").map((n) => n.id)
+      );
+      setExpandedNodeIds(l1Ids);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to compile from YouTube URL"
       );
     } finally {
       setIsLoading(false);
@@ -147,7 +173,11 @@ function App() {
       <main className="app-main">
         {!graph && (
           <div className="input-panel">
-            <TranscriptInput onSubmit={handleSubmit} isLoading={isLoading} />
+            <TranscriptInput 
+              onSubmit={handleSubmit} 
+              onSubmitUrl={handleSubmitUrl}
+              isLoading={isLoading} 
+            />
             {error && <div className="error-panel">{error}</div>}
           </div>
         )}

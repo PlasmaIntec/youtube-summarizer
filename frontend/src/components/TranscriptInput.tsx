@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { TranscriptInput as TranscriptInputType, Provider } from "../types/graph";
+import type { TranscriptInput as TranscriptInputType, Provider, YouTubeURLInput } from "../types/graph";
 
 interface TranscriptInputProps {
   onSubmit: (input: TranscriptInputType) => void;
+  onSubmitUrl: (input: YouTubeURLInput) => void;
   isLoading: boolean;
 }
 
@@ -49,12 +50,14 @@ const EXAMPLE_COMPLEX = `{
   "channel": "Financial Foundations"
 }`;
 
-export function TranscriptInput({ onSubmit, isLoading }: TranscriptInputProps) {
+export function TranscriptInput({ onSubmit, onSubmitUrl, isLoading }: TranscriptInputProps) {
+  const [mode, setMode] = useState<"url" | "json">("url");
   const [input, setInput] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<Provider>("claude");
 
-  const handleSubmit = () => {
+  const handleSubmitJson = () => {
     setError(null);
 
     try {
@@ -82,6 +85,30 @@ export function TranscriptInput({ onSubmit, isLoading }: TranscriptInputProps) {
     }
   };
 
+  const handleSubmitUrl = () => {
+    setError(null);
+
+    if (!youtubeUrl.trim()) {
+      setError("Please enter a YouTube URL");
+      return;
+    }
+
+    // Basic YouTube URL validation
+    const isYouTube = 
+      youtubeUrl.includes("youtube.com") || 
+      youtubeUrl.includes("youtu.be");
+    
+    if (!isYouTube) {
+      setError("Please enter a valid YouTube URL");
+      return;
+    }
+
+    onSubmitUrl({
+      url: youtubeUrl,
+      provider,
+    });
+  };
+
   const loadSimple = () => {
     setInput(EXAMPLE_SIMPLE);
     setError(null);
@@ -95,21 +122,60 @@ export function TranscriptInput({ onSubmit, isLoading }: TranscriptInputProps) {
   return (
     <div className="transcript-input">
       <div className="input-header">
-        <h2>Transcript Input</h2>
-        <div className="example-buttons">
-          <button className="example-btn" onClick={loadSimple}>
-            Simple (1 min)
+        <h2>Input Source</h2>
+        <div className="mode-tabs">
+          <button
+            className={`mode-tab ${mode === "url" ? "active" : ""}`}
+            onClick={() => {
+              setMode("url");
+              setError(null);
+            }}
+            disabled={isLoading}
+          >
+            YouTube URL
           </button>
-          <button className="example-btn complex" onClick={loadComplex}>
-            Complex (12 min)
+          <button
+            className={`mode-tab ${mode === "json" ? "active" : ""}`}
+            onClick={() => {
+              setMode("json");
+              setError(null);
+            }}
+            disabled={isLoading}
+          >
+            JSON Transcript
           </button>
         </div>
       </div>
 
-      <textarea
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder={`Paste your transcript JSON here...
+      {mode === "url" ? (
+        <div className="url-input-section">
+          <input
+            type="text"
+            className="url-input"
+            value={youtubeUrl}
+            onChange={(e) => setYoutubeUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            disabled={isLoading}
+          />
+          <p className="url-hint">
+            Paste any YouTube video URL to fetch and compile its transcript
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="example-buttons">
+            <button className="example-btn" onClick={loadSimple}>
+              Simple (1 min)
+            </button>
+            <button className="example-btn complex" onClick={loadComplex}>
+              Complex (12 min)
+            </button>
+          </div>
+
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={`Paste your transcript JSON here...
 
 Format:
 {
@@ -118,8 +184,10 @@ Format:
   ],
   "title": "Optional title"
 }`}
-        disabled={isLoading}
-      />
+            disabled={isLoading}
+          />
+        </>
+      )}
 
       {error && <div className="error-message">{error}</div>}
 
@@ -143,8 +211,8 @@ Format:
 
       <button
         className="submit-btn"
-        onClick={handleSubmit}
-        disabled={isLoading || !input.trim()}
+        onClick={mode === "url" ? handleSubmitUrl : handleSubmitJson}
+        disabled={isLoading || (mode === "url" ? !youtubeUrl.trim() : !input.trim())}
       >
         {isLoading ? "Compiling..." : `Compile with ${provider === "claude" ? "Claude" : "ChatGPT"}`}
       </button>
@@ -152,7 +220,9 @@ Format:
       {isLoading && (
         <div className="loading-indicator">
           <div className="spinner" />
-          <p>Processing transcript with {provider === "claude" ? "Claude" : "ChatGPT"}...</p>
+          <p>
+            {mode === "url" ? "Fetching transcript and processing..." : `Processing transcript with ${provider === "claude" ? "Claude" : "ChatGPT"}...`}
+          </p>
         </div>
       )}
     </div>

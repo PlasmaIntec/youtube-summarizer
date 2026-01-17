@@ -14,3 +14,9 @@ class TranscriptInput(BaseModel):
     description: Optional[str] = None
     channel: Optional[str] = None
     provider: Literal["claude", "chatgpt"] = "claude"
+
+
+class YouTubeURLInput(BaseModel):
+    url: str
+    provider: Literal["claude", "chatgpt"] = "claude"
+    languages: Optional[list[str]] = None

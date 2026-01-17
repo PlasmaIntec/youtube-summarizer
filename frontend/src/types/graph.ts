@@ -61,3 +61,9 @@ export interface TranscriptInput {
   channel?: string;
   provider?: Provider;
 }
+
+export interface YouTubeURLInput {
+  url: string;
+  provider?: Provider;
+  languages?: string[];
+}

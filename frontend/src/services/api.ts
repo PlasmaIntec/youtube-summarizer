@@ -1,5 +1,10 @@
 import axios from "axios";
-import type { TranscriptInput, GraphOutput, YouTubeURLInput } from "../types/graph";
+import type { TranscriptInput, TranscriptSegment, GraphOutput, YouTubeURLInput } from "../types/graph";
+
+export interface TranscriptResponse {
+  transcript: TranscriptSegment[];
+  video_id: string;
+}
 
 const API_BASE = "http://localhost:8000/api";
 
@@ -45,6 +50,23 @@ export async function compileFromUrl(
         throw new Error(`${detail.message}:\n${detail.errors.join("\n")}`);
       }
       throw new Error(detail.message || "Compilation failed");
+    }
+    throw err;
+  }
+}
+
+export async function fetchTranscript(
+  input: YouTubeURLInput
+): Promise<TranscriptResponse> {
+  try {
+    const response = await axios.post<TranscriptResponse>(
+      `${API_BASE}/transcript`,
+      input
+    );
+    return response.data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data?.detail) {
+      throw new Error(err.response.data.detail);
     }
     throw err;
   }

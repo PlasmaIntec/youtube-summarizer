@@ -2,19 +2,33 @@
  * RUTHLESS App.
  * L1 only on load. Click → expand neighbors.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { TranscriptInput } from "./components/TranscriptInput";
 import { GraphView } from "./components/GraphView";
 import { NodeInspector } from "./components/NodeInspector";
 import { Timeline } from "./components/Timeline";
-import { compileTranscript, compileFromUrl } from "./services/api";
+import { YouTubePlayer, type YouTubePlayerRef } from "./components/YouTubePlayer";
+import { TranscriptPanel } from "./components/TranscriptPanel";
+import { compileTranscript, compileFromUrl, fetchTranscript } from "./services/api";
 import type {
   TranscriptInput as TranscriptInputType,
   YouTubeURLInput,
   GraphOutput,
   GraphNode,
+  TranscriptSegment,
 } from "./types/graph";
 import "./App.css";
+
+function extractYoutubeVideoId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
 
 export type LoadingStage = "idle" | "fetching" | "generating" | "validating";
 
@@ -33,6 +47,14 @@ function App() {
     t0: number;
     t1: number;
   } | null>(null);
+
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<TranscriptSegment[] | null>(null);
+  const playerRef = useRef<YouTubePlayerRef>(null);
+
+  const handleSeek = useCallback((seconds: number) => {
+    playerRef.current?.seekTo(seconds);
+  }, []);
 
   const handleSubmit = async (input: TranscriptInputType) => {
     setLoadingStage("generating");
@@ -68,17 +90,33 @@ function App() {
     setGraph(null);
     setSelectedNode(null);
     setExpandedNodeIds(new Set());
+    setTranscript(null);
+
+    // Extract video ID for player - shows immediately
+    const vid = extractYoutubeVideoId(input.url);
+    setVideoId(vid);
 
     try {
-      // Simulate stage transitions since backend doesn't stream progress
-      // The actual fetch + compile happens in one API call
-      const fetchTimeout = setTimeout(() => setLoadingStage("generating"), 3000);
-      const generateTimeout = setTimeout(() => setLoadingStage("validating"), 8000);
+      // Fetch transcript first (fast) - shows incrementally
+      const transcriptPromise = fetchTranscript(input);
 
-      const result = await compileFromUrl(input);
+      // Start compilation in parallel (slow)
+      const compilePromise = compileFromUrl(input);
 
-      clearTimeout(fetchTimeout);
-      clearTimeout(generateTimeout);
+      // Show transcript as soon as it's ready
+      transcriptPromise.then((transcriptResult) => {
+        setTranscript(transcriptResult.transcript);
+        setLoadingStage("generating");
+      }).catch(() => {
+        // Transcript fetch failed, continue with compilation
+        setLoadingStage("generating");
+      });
+
+      // Wait for compilation to complete
+      const result = await compilePromise;
+
+      setLoadingStage("validating");
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       setGraph(result);
 
@@ -172,20 +210,19 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>RUTHLESS Graph Compiler</h1>
-        {graph && (
+      {graph && (
+        <header className="app-header">
           <div className="graph-stats">
             <span>L1: {l1Count}</span>
             <span>L2: {l2Count}</span>
             <span>L3: {l3Count}</span>
             <span>Visible: {visibleNodes.length}</span>
           </div>
-        )}
-      </header>
+        </header>
+      )}
 
       <main className="app-main">
-        {!graph && (
+        {!graph && !videoId && (
           <div className="input-panel">
             <TranscriptInput
               onSubmit={handleSubmit}
@@ -196,10 +233,31 @@ function App() {
           </div>
         )}
 
+        {!graph && videoId && (
+          <>
+            <aside className="controls-panel">
+              <YouTubePlayer ref={playerRef} videoId={videoId} />
+              <button className="new-btn" onClick={() => { setVideoId(null); setTranscript(null); setLoadingStage("idle"); }}>
+                Cancel
+              </button>
+              {transcript && <TranscriptPanel transcript={transcript} onSeek={handleSeek} />}
+            </aside>
+            <div className="graph-panel loading-panel">
+              <div className="loading-message">
+                {loadingStage === "fetching" && "Fetching transcript..."}
+                {loadingStage === "generating" && "Generating graph..."}
+                {loadingStage === "validating" && "Validating..."}
+              </div>
+              {error && <div className="error-panel">{error}</div>}
+            </div>
+          </>
+        )}
+
         {graph && visibleGraph && (
           <>
             <aside className="controls-panel">
-              <button className="new-btn" onClick={() => setGraph(null)}>
+              {videoId && <YouTubePlayer ref={playerRef} videoId={videoId} />}
+              <button className="new-btn" onClick={() => { setGraph(null); setVideoId(null); setTranscript(null); }}>
                 New Transcript
               </button>
               <button className="reset-btn" onClick={handleReset}>
@@ -209,6 +267,7 @@ function App() {
                 Expand All
               </button>
               <div className="hint">Click nodes to expand neighbors</div>
+              {transcript && <TranscriptPanel transcript={transcript} onSeek={handleSeek} />}
             </aside>
 
             <div className="graph-panel">

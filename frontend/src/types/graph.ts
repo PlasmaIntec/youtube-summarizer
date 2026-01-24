@@ -44,6 +44,7 @@ export interface GraphOutput {
   nodes: GraphNode[];
   edges: GraphEdge[];
   meta: GraphMeta;
+  transcript?: TranscriptSegment[];
 }
 
 export interface TranscriptSegment {

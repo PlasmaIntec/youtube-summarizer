@@ -3,8 +3,10 @@ RUTHLESS Graph Models.
 Minimal schema per RUTHLESS_SPEC.md - no elegance theater.
 """
 from pydantic import BaseModel, Field, field_validator
-from typing import Literal
+from typing import Literal, Optional
 from enum import Enum
+
+from app.models.transcript import TranscriptSegment
 
 
 class NodeLayer(str, Enum):
@@ -77,3 +79,4 @@ class GraphOutput(BaseModel):
     nodes: list[GraphNode]
     edges: list[GraphEdge]
     meta: GraphMeta
+    transcript: Optional[list[TranscriptSegment]] = None

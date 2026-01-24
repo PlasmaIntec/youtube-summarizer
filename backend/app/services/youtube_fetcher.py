@@ -60,7 +60,8 @@ def extract_video_id(url: str) -> str:
 
 def parse_vtt_to_segments(vtt_content: str) -> list[TranscriptSegment]:
     """Parse VTT subtitle content into TranscriptSegment list."""
-    segments = []
+    import html
+    raw_segments = []
 
     # VTT timestamp pattern: 00:00:00.000 --> 00:00:00.000
     timestamp_pattern = r"(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2})\.(\d{3})"
@@ -91,15 +92,73 @@ def parse_vtt_to_segments(vtt_content: str) -> list[TranscriptSegment]:
                 i += 1
 
             if text_lines:
-                segments.append(TranscriptSegment(
+                # Decode HTML entities like &gt; -> >
+                full_text = html.unescape(' '.join(text_lines))
+                raw_segments.append(TranscriptSegment(
                     t0=t0,
                     t1=t1,
-                    text=' '.join(text_lines)
+                    text=full_text
                 ))
         else:
             i += 1
 
-    return segments
+    # YouTube auto-captions have rolling/progressive text where each segment
+    # includes text from the previous segment. We need to extract only the NEW text.
+    if not raw_segments:
+        return []
+
+    # Extract only new text from each segment by removing overlap with previous
+    cleaned_parts = []
+    prev_text = ""
+
+    for seg in raw_segments:
+        curr_text = seg.text
+        new_text = curr_text
+
+        # Find overlap: check if end of prev_text matches start of curr_text
+        if prev_text:
+            # Try to find the longest overlap
+            for overlap_len in range(min(len(prev_text), len(curr_text)), 0, -1):
+                if prev_text[-overlap_len:] == curr_text[:overlap_len]:
+                    new_text = curr_text[overlap_len:].strip()
+                    break
+
+        if new_text:
+            cleaned_parts.append((seg.t0, seg.t1, new_text))
+        prev_text = curr_text
+
+    if not cleaned_parts:
+        return []
+
+    # Merge into paragraphs (~30 seconds each)
+    paragraphs = []
+    current_t0 = cleaned_parts[0][0]
+    current_t1 = cleaned_parts[0][1]
+    current_words = [cleaned_parts[0][2]]
+
+    for t0, t1, text in cleaned_parts[1:]:
+        # Start new paragraph every ~30 seconds
+        if t0 - current_t0 >= 30:
+            paragraphs.append(TranscriptSegment(
+                t0=current_t0,
+                t1=current_t1,
+                text=' '.join(current_words)
+            ))
+            current_t0 = t0
+            current_words = []
+
+        current_words.append(text)
+        current_t1 = t1
+
+    # Don't forget the last paragraph
+    if current_words:
+        paragraphs.append(TranscriptSegment(
+            t0=current_t0,
+            t1=current_t1,
+            text=' '.join(current_words)
+        ))
+
+    return paragraphs
 
 
 def fetch_youtube_transcript(

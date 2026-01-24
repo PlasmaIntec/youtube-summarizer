@@ -16,9 +16,11 @@ import type {
 } from "./types/graph";
 import "./App.css";
 
+export type LoadingStage = "idle" | "fetching" | "generating" | "validating";
+
 function App() {
   const [graph, setGraph] = useState<GraphOutput | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<LoadingStage>("idle");
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
@@ -33,7 +35,7 @@ function App() {
   } | null>(null);
 
   const handleSubmit = async (input: TranscriptInputType) => {
-    setIsLoading(true);
+    setLoadingStage("generating");
     setError(null);
     setGraph(null);
     setSelectedNode(null);
@@ -41,6 +43,9 @@ function App() {
 
     try {
       const result = await compileTranscript(input);
+      setLoadingStage("validating");
+      // Brief pause to show validation stage
+      await new Promise((resolve) => setTimeout(resolve, 500));
       setGraph(result);
 
       // Start with L1 nodes expanded (visible)
@@ -53,19 +58,28 @@ function App() {
         err instanceof Error ? err.message : "Failed to compile transcript"
       );
     } finally {
-      setIsLoading(false);
+      setLoadingStage("idle");
     }
   };
 
   const handleSubmitUrl = async (input: YouTubeURLInput) => {
-    setIsLoading(true);
+    setLoadingStage("fetching");
     setError(null);
     setGraph(null);
     setSelectedNode(null);
     setExpandedNodeIds(new Set());
 
     try {
+      // Simulate stage transitions since backend doesn't stream progress
+      // The actual fetch + compile happens in one API call
+      const fetchTimeout = setTimeout(() => setLoadingStage("generating"), 3000);
+      const generateTimeout = setTimeout(() => setLoadingStage("validating"), 8000);
+
       const result = await compileFromUrl(input);
+
+      clearTimeout(fetchTimeout);
+      clearTimeout(generateTimeout);
+
       setGraph(result);
 
       // Start with L1 nodes expanded (visible)
@@ -78,7 +92,7 @@ function App() {
         err instanceof Error ? err.message : "Failed to compile from YouTube URL"
       );
     } finally {
-      setIsLoading(false);
+      setLoadingStage("idle");
     }
   };
 
@@ -173,10 +187,10 @@ function App() {
       <main className="app-main">
         {!graph && (
           <div className="input-panel">
-            <TranscriptInput 
-              onSubmit={handleSubmit} 
+            <TranscriptInput
+              onSubmit={handleSubmit}
               onSubmitUrl={handleSubmitUrl}
-              isLoading={isLoading} 
+              loadingStage={loadingStage}
             />
             {error && <div className="error-panel">{error}</div>}
           </div>

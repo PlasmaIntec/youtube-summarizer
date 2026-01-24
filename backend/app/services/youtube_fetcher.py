@@ -5,6 +5,7 @@ Fetches transcripts from YouTube URLs using yt-dlp.
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from typing import Optional
 from urllib.parse import urlparse, parse_qs
@@ -131,9 +132,9 @@ def fetch_youtube_transcript(
     with tempfile.TemporaryDirectory() as temp_dir:
         output_template = os.path.join(temp_dir, "sub")
 
-        # Build yt-dlp command
+        # Build yt-dlp command (use sys.executable to ensure same Python)
         cmd = [
-            "python", "-m", "yt_dlp",
+            sys.executable, "-m", "yt_dlp",
             "--write-auto-sub",
             "--sub-lang", ",".join(languages),
             "--skip-download",

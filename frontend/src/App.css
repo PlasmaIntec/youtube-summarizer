@@ -319,6 +319,123 @@
   }
 }
 
+/* Progress Indicator */
+.progress-indicator {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.progress-stages {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+
+.progress-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  position: relative;
+}
+
+.progress-stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: calc(50% + 16px);
+  width: calc(100% - 32px);
+  height: 2px;
+  background: var(--border-color);
+}
+
+.progress-stage.complete:not(:last-child)::after {
+  background: var(--accent-secondary);
+}
+
+.stage-indicator {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  z-index: 1;
+}
+
+.progress-stage.complete .stage-indicator {
+  background: var(--accent-secondary);
+  border-color: var(--accent-secondary);
+}
+
+.progress-stage.current .stage-indicator {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.check-icon {
+  width: 14px;
+  height: 14px;
+  fill: white;
+}
+
+.stage-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.stage-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.stage-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.progress-stage.current .stage-label {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.progress-stage.complete .stage-label {
+  color: var(--accent-secondary);
+}
+
+.progress-details {
+  text-align: center;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.progress-description {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.progress-model {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--accent-primary);
+}
+
 /* Layer Controls */
 .layer-controls {
   display: flex;

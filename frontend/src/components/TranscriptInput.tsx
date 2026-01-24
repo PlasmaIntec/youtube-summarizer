@@ -1,10 +1,12 @@
 import { useState } from "react";
 import type { TranscriptInput as TranscriptInputType, Provider, YouTubeURLInput } from "../types/graph";
+import type { LoadingStage } from "../App";
+import { ProgressIndicator } from "./ProgressIndicator";
 
 interface TranscriptInputProps {
   onSubmit: (input: TranscriptInputType) => void;
   onSubmitUrl: (input: YouTubeURLInput) => void;
-  isLoading: boolean;
+  loadingStage: LoadingStage;
 }
 
 const EXAMPLE_SIMPLE = `{
@@ -50,7 +52,8 @@ const EXAMPLE_COMPLEX = `{
   "channel": "Financial Foundations"
 }`;
 
-export function TranscriptInput({ onSubmit, onSubmitUrl, isLoading }: TranscriptInputProps) {
+export function TranscriptInput({ onSubmit, onSubmitUrl, loadingStage }: TranscriptInputProps) {
+  const isLoading = loadingStage !== "idle";
   const [mode, setMode] = useState<"url" | "json">("url");
   const [input, setInput] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -218,12 +221,7 @@ Format:
       </button>
 
       {isLoading && (
-        <div className="loading-indicator">
-          <div className="spinner" />
-          <p>
-            {mode === "url" ? "Fetching transcript and processing..." : `Processing transcript with ${provider === "claude" ? "Claude" : "ChatGPT"}...`}
-          </p>
-        </div>
+        <ProgressIndicator stage={loadingStage} mode={mode} provider={provider} />
       )}
     </div>
   );

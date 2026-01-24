@@ -1,12 +1,11 @@
 /**
- * RUTHLESS App.
- * L1 only on load. Click → expand neighbors.
+ * App - Simplified.
+ * Facts connected by causal relationships.
  */
 import { useState, useCallback, useRef } from "react";
 import { TranscriptInput } from "./components/TranscriptInput";
 import { GraphView } from "./components/GraphView";
 import { NodeInspector } from "./components/NodeInspector";
-import { Timeline } from "./components/Timeline";
 import { YouTubePlayer, type YouTubePlayerRef } from "./components/YouTubePlayer";
 import { TranscriptPanel } from "./components/TranscriptPanel";
 import { compileTranscript, compileFromUrl, fetchTranscript } from "./services/api";
@@ -38,15 +37,10 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
-  // Expanded nodes: starts with L1 only, expands on click
+  // Expanded nodes: starts with all visible, can collapse/expand
   const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
     new Set()
   );
-
-  const [highlightedTimeRange, setHighlightedTimeRange] = useState<{
-    t0: number;
-    t1: number;
-  } | null>(null);
 
   const [videoId, setVideoId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<TranscriptSegment[] | null>(null);
@@ -66,15 +60,11 @@ function App() {
     try {
       const result = await compileTranscript(input);
       setLoadingStage("validating");
-      // Brief pause to show validation stage
       await new Promise((resolve) => setTimeout(resolve, 500));
       setGraph(result);
 
-      // Start with L1 nodes expanded (visible)
-      const l1Ids = new Set(
-        result.nodes.filter((n) => n.layer === "L1").map((n) => n.id)
-      );
-      setExpandedNodeIds(l1Ids);
+      // Start with all nodes visible
+      setExpandedNodeIds(new Set(result.nodes.map((n) => n.id)));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to compile transcript"
@@ -120,11 +110,8 @@ function App() {
 
       setGraph(result);
 
-      // Start with L1 nodes expanded (visible)
-      const l1Ids = new Set(
-        result.nodes.filter((n) => n.layer === "L1").map((n) => n.id)
-      );
-      setExpandedNodeIds(l1Ids);
+      // Start with all nodes visible
+      setExpandedNodeIds(new Set(result.nodes.map((n) => n.id)));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to compile from YouTube URL"
@@ -134,7 +121,7 @@ function App() {
     }
   };
 
-  // Click node → expand its neighbors
+  // Click node → select and expand its neighbors
   const handleNodeClick = useCallback(
     (node: GraphNode) => {
       setSelectedNode(node);
@@ -167,17 +154,7 @@ function App() {
     setSelectedNode(null);
   }, []);
 
-  // Reset to L1 only
-  const handleReset = useCallback(() => {
-    if (!graph) return;
-    const l1Ids = new Set(
-      graph.nodes.filter((n) => n.layer === "L1").map((n) => n.id)
-    );
-    setExpandedNodeIds(l1Ids);
-    setSelectedNode(null);
-  }, [graph]);
-
-  // Expand all
+  // Expand all nodes
   const handleExpandAll = useCallback(() => {
     if (!graph) return;
     setExpandedNodeIds(new Set(graph.nodes.map((n) => n.id)));
@@ -204,18 +181,13 @@ function App() {
       }
     : null;
 
-  const l1Count = graph?.nodes.filter((n) => n.layer === "L1").length ?? 0;
-  const l2Count = graph?.nodes.filter((n) => n.layer === "L2").length ?? 0;
-  const l3Count = graph?.nodes.filter((n) => n.layer === "L3").length ?? 0;
-
   return (
     <div className="app">
       {graph && (
         <header className="app-header">
           <div className="graph-stats">
-            <span>L1: {l1Count}</span>
-            <span>L2: {l2Count}</span>
-            <span>L3: {l3Count}</span>
+            <span>{graph.title}</span>
+            <span>Facts: {graph.nodes.length}</span>
             <span>Visible: {visibleNodes.length}</span>
           </div>
         </header>
@@ -260,13 +232,10 @@ function App() {
               <button className="new-btn" onClick={() => { setGraph(null); setVideoId(null); setTranscript(null); }}>
                 New Transcript
               </button>
-              <button className="reset-btn" onClick={handleReset}>
-                Reset to L1
-              </button>
               <button className="expand-btn" onClick={handleExpandAll}>
-                Expand All
+                Show All
               </button>
-              <div className="hint">Click nodes to expand neighbors</div>
+              <div className="hint">Click nodes to explore connections</div>
               {transcript && <TranscriptPanel transcript={transcript} onSeek={handleSeek} />}
             </aside>
 
@@ -278,13 +247,6 @@ function App() {
                 expandedNodeIds={expandedNodeIds}
                 onNodeClick={handleNodeClick}
                 onBackgroundClick={handleBackgroundClick}
-                highlightedTimeRange={highlightedTimeRange}
-              />
-              <Timeline
-                nodes={graph.nodes}
-                duration={graph.meta.duration_seconds}
-                highlightedRange={highlightedTimeRange}
-                onRangeChange={setHighlightedTimeRange}
               />
             </div>
 

@@ -1,7 +1,6 @@
 /**
- * RUTHLESS GraphView.
- * Click nodes to expand. Size = density. Opacity = confidence.
- * Preserves view position on updates.
+ * GraphView - Simplified.
+ * Facts connected by causal relationships.
  */
 import { useEffect, useRef, useCallback } from "react";
 import * as d3 from "d3";
@@ -13,8 +12,6 @@ import {
   getCurrentTransform,
   getNodeRadius,
   getNodeColor,
-  getNodeOpacity,
-  getLinkWidth,
   getLinkColor,
 } from "../utils/d3-graph";
 import type { D3Node } from "../utils/d3-graph";
@@ -26,7 +23,6 @@ interface GraphViewProps {
   expandedNodeIds: Set<string>;
   onNodeClick: (node: GraphNode) => void;
   onBackgroundClick: () => void;
-  highlightedTimeRange: { t0: number; t1: number } | null;
 }
 
 export function GraphView({
@@ -36,38 +32,16 @@ export function GraphView({
   expandedNodeIds,
   onNodeClick,
   onBackgroundClick,
-  highlightedTimeRange,
 }: GraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  // Preserve node positions between renders
-  const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(
-    new Map()
-  );
-  // Track if this is first render
+  const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   const isFirstRenderRef = useRef(true);
 
-  const isNodeInTimeRange = useCallback(
-    (node: GraphNode) => {
-      if (!highlightedTimeRange) return true;
-      return node.time_spans.some(
-        (span) =>
-          span.t0 <= highlightedTimeRange.t1 &&
-          span.t1 >= highlightedTimeRange.t0
-      );
-    },
-    [highlightedTimeRange]
-  );
-
-  // Check if node has unexpanded neighbors
   const hasUnexpandedNeighbors = useCallback(
     (nodeId: string) => {
       for (const edge of fullGraph.edges) {
-        if (edge.source === nodeId && !expandedNodeIds.has(edge.target)) {
-          return true;
-        }
-        if (edge.target === nodeId && !expandedNodeIds.has(edge.source)) {
-          return true;
-        }
+        if (edge.source === nodeId && !expandedNodeIds.has(edge.target)) return true;
+        if (edge.target === nodeId && !expandedNodeIds.has(edge.source)) return true;
       }
       return false;
     },
@@ -81,9 +55,7 @@ export function GraphView({
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
 
-    // Preserve current transform before clearing
     const currentTransform = getCurrentTransform(svg);
-
     svg.selectAll("*").remove();
 
     const { d3Nodes, d3Links } = transformToD3Data(graph.nodes, graph.edges);
@@ -94,36 +66,35 @@ export function GraphView({
       if (savedPos) {
         node.x = savedPos.x;
         node.y = savedPos.y;
-        node.fx = savedPos.x; // Fix position
+        node.fx = savedPos.x;
         node.fy = savedPos.y;
       }
     });
 
     const g = svg.append("g");
 
-    // Only use default transform on first render
     const transform = isFirstRenderRef.current ? undefined : currentTransform;
     setupZoom(svg, g, width, height, transform);
     isFirstRenderRef.current = false;
 
-    // Run simulation (will respect fixed positions)
     createForceSimulation(d3Nodes, d3Links, width / 2, height / 2);
 
-    // Save positions after simulation
+    // Save positions
     d3Nodes.forEach((node) => {
       if (node.x !== undefined && node.y !== undefined) {
         nodePositionsRef.current.set(node.id, { x: node.x, y: node.y });
       }
     });
 
-    // Render links
+    // Render links with relationship colors
     g.append("g")
       .attr("class", "links")
       .selectAll("line")
       .data(d3Links)
       .join("line")
       .attr("stroke", (d) => getLinkColor(d.data))
-      .attr("stroke-width", (d) => getLinkWidth(d.data))
+      .attr("stroke-width", 2)
+      .attr("stroke-opacity", 0.7)
       .attr("x1", (d) => (d.source as D3Node).x!)
       .attr("y1", (d) => (d.source as D3Node).y!)
       .attr("x2", (d) => (d.target as D3Node).x!)
@@ -142,50 +113,37 @@ export function GraphView({
     // Node circles
     node
       .append("circle")
-      .attr("r", (d) => getNodeRadius(d.data))
-      .attr("fill", (d) => getNodeColor(d.data))
-      .attr("opacity", (d) => {
-        const baseOpacity = getNodeOpacity(d.data);
-        const inTimeRange = isNodeInTimeRange(d.data);
-        return inTimeRange ? baseOpacity : baseOpacity * 0.3;
-      })
-      .attr("stroke", (d) =>
-        d.id === selectedNodeId ? "#fff" : "transparent"
-      )
+      .attr("r", getNodeRadius())
+      .attr("fill", getNodeColor())
+      .attr("stroke", (d) => (d.id === selectedNodeId ? "#fff" : "transparent"))
       .attr("stroke-width", 3);
 
-    // Expansion indicator (+ sign for nodes with hidden neighbors)
+    // Expansion indicator
     node
       .filter((d) => hasUnexpandedNeighbors(d.id))
       .append("text")
       .text("+")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "central")
-      .attr("font-size", (d) => getNodeRadius(d.data) * 0.8)
+      .attr("font-size", 14)
       .attr("font-weight", "bold")
       .attr("fill", "#fff")
       .attr("pointer-events", "none");
 
-    // Statement as label (truncated)
+    // Fact as label (truncated)
     node
       .append("text")
       .text((d) => {
-        const stmt = d.data.statement;
-        return stmt.length > 30 ? stmt.slice(0, 30) + "…" : stmt;
+        const fact = d.data.fact || "";
+        return fact.length > 40 ? fact.slice(0, 40) + "…" : fact;
       })
-      .attr("x", (d) => getNodeRadius(d.data) + 6)
+      .attr("x", getNodeRadius() + 8)
       .attr("y", 4)
-      .attr("font-size", "11px")
-      .attr("fill", "#e5e7eb")
-      .attr("opacity", (d) => (isNodeInTimeRange(d.data) ? 0.9 : 0.3));
+      .attr("font-size", "12px")
+      .attr("fill", "#e5e7eb");
 
     // Tooltip
-    node
-      .append("title")
-      .text(
-        (d) =>
-          `${d.data.statement}\n\nLayer: ${d.data.layer}\nDensity: ${d.data.density}\nConfidence: ${d.data.confidence}\nTags: ${d.data.tags.join(", ") || "none"}`
-      );
+    node.append("title").text((d) => d.data.fact || "");
 
     // Click handler
     node.on("click", (event, d) => {
@@ -194,22 +152,12 @@ export function GraphView({
     });
 
     // Background click
-    svg.on("click", () => {
-      onBackgroundClick();
-    });
-  }, [
-    graph,
-    selectedNodeId,
-    onNodeClick,
-    onBackgroundClick,
-    isNodeInTimeRange,
-    hasUnexpandedNeighbors,
-  ]);
+    svg.on("click", () => onBackgroundClick());
+  }, [graph, selectedNodeId, onNodeClick, onBackgroundClick, hasUnexpandedNeighbors]);
 
-  // Update selection highlight without full redraw
+  // Update selection highlight
   useEffect(() => {
     if (!svgRef.current) return;
-
     const svg = d3.select(svgRef.current);
     svg.selectAll(".nodes circle").attr("stroke", function () {
       const d = d3.select(this.parentNode).datum() as D3Node;
@@ -220,11 +168,7 @@ export function GraphView({
   return (
     <svg
       ref={svgRef}
-      style={{
-        width: "100%",
-        height: "100%",
-        background: "#111827",
-      }}
+      style={{ width: "100%", height: "100%", background: "#111827" }}
     />
   );
 }

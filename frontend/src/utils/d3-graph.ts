@@ -1,9 +1,9 @@
 /**
- * RUTHLESS D3 Graph Utils.
- * Node size = density. Node opacity = confidence.
+ * D3 Graph Utils - Simplified.
+ * Facts connected by causal relationships.
  */
 import * as d3 from "d3";
-import type { GraphNode, GraphEdge, NodeLayer } from "../types/graph";
+import type { GraphNode, GraphEdge, Relationship } from "../types/graph";
 
 export interface D3Node extends d3.SimulationNodeDatum {
   id: string;
@@ -14,25 +14,12 @@ export interface D3Link extends d3.SimulationLinkDatum<D3Node> {
   data: GraphEdge;
 }
 
-// Layer colors: L1 = purple (core), L2 = green (support), L3 = amber (detail)
-const LAYER_COLORS: Record<NodeLayer, string> = {
-  L1: "#8b5cf6",
-  L2: "#22c55e",
-  L3: "#f59e0b",
-};
-
-// Size based on density
-const DENSITY_RADIUS: Record<number, number> = {
-  0.2: 12,
-  0.5: 20,
-  0.8: 32,
-};
-
-// Edge width based on weight
-const WEIGHT_WIDTH: Record<number, number> = {
-  0.3: 1,
-  0.6: 2,
-  0.9: 4,
+// Relationship colors
+const RELATIONSHIP_COLORS: Record<Relationship, string> = {
+  causes: "#ef4444",      // red
+  enables: "#22c55e",     // green
+  contradicts: "#f59e0b", // amber
+  supports: "#6366f1",    // indigo
 };
 
 export function createForceSimulation(
@@ -48,14 +35,14 @@ export function createForceSimulation(
       d3
         .forceLink<D3Node, D3Link>(links)
         .id((d) => d.id)
-        .distance(120)
-        .strength((d) => d.data.weight * 0.3)
+        .distance(150)
+        .strength(0.5)
     )
-    .force("charge", d3.forceManyBody().strength(-400))
+    .force("charge", d3.forceManyBody().strength(-300))
     .force("center", d3.forceCenter(centerX, centerY))
     .force(
       "collision",
-      d3.forceCollide<D3Node>().radius((d) => getNodeRadius(d.data) + 10)
+      d3.forceCollide<D3Node>().radius(40)
     );
 
   // Run to completion
@@ -67,26 +54,16 @@ export function createForceSimulation(
   return simulation;
 }
 
-export function getNodeRadius(node: GraphNode): number {
-  return DENSITY_RADIUS[node.density] ?? 16;
+export function getNodeRadius(): number {
+  return 20;
 }
 
-export function getNodeColor(node: GraphNode): string {
-  return LAYER_COLORS[node.layer];
-}
-
-export function getNodeOpacity(node: GraphNode): number {
-  // Confidence: 0.3 → 0.4, 0.6 → 0.7, 0.9 → 1.0
-  return 0.3 + node.confidence * 0.7;
-}
-
-export function getLinkWidth(edge: GraphEdge): number {
-  return WEIGHT_WIDTH[edge.weight] ?? 2;
+export function getNodeColor(): string {
+  return "#6366f1"; // indigo
 }
 
 export function getLinkColor(edge: GraphEdge): string {
-  const opacity = 0.3 + edge.weight * 0.4;
-  return `rgba(150, 150, 150, ${opacity})`;
+  return RELATIONSHIP_COLORS[edge.relationship] || "#666";
 }
 
 export function transformToD3Data(
@@ -127,8 +104,7 @@ export function setupZoom(
 
   svg.call(zoom);
 
-  // Use provided transform or default to center
-  const transform = initialTransform || d3.zoomIdentity.translate(width / 2, height / 2).scale(0.7);
+  const transform = initialTransform || d3.zoomIdentity.translate(width / 2, height / 2).scale(0.8);
   svg.call(zoom.transform, transform);
 
   return zoom;

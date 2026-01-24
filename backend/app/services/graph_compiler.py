@@ -1,7 +1,6 @@
 """
-RUTHLESS Graph Compiler.
-Converts transcript → validated information graph.
-Supports Claude and ChatGPT.
+Graph Compiler.
+Converts transcript → fact graph via LLM.
 """
 import json
 import os
@@ -12,14 +11,13 @@ from dotenv import load_dotenv
 from app.models.transcript import TranscriptInput
 from app.models.graph import GraphOutput
 from app.prompts.compiler import SYSTEM_PROMPT
-from app.services.validator import validate_or_raise
+from app.services.validator import validate_and_fix
 
 load_dotenv()
 
 
 class GraphCompiler:
     def __init__(self):
-        # Initialize clients (lazy - only if keys exist)
         self.anthropic_client = None
         self.openai_client = None
 
@@ -40,9 +38,9 @@ class GraphCompiler:
 
         graph_json = self._extract_json(response_text)
 
-        # Parse and validate ruthlessly
+        # Parse and fix any structural issues
         output = GraphOutput.model_validate(graph_json)
-        validate_or_raise(output)
+        output = validate_and_fix(output)
 
         return output
 
@@ -52,7 +50,7 @@ class GraphCompiler:
 
         response = self.anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=8000,
+            max_tokens=4000,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}]
         )
@@ -64,7 +62,7 @@ class GraphCompiler:
 
         response = self.openai_client.chat.completions.create(
             model="gpt-4o",
-            max_tokens=8000,
+            max_tokens=4000,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message}
@@ -75,18 +73,10 @@ class GraphCompiler:
     def _build_user_message(self, input_data: TranscriptInput) -> str:
         transcript_data = {
             "transcript": [
-                {"t0": seg.t0, "t1": seg.t1, "text": seg.text}
+                {"timestamp": seg.t0, "text": seg.text}
                 for seg in input_data.transcript
             ]
         }
-
-        if input_data.title:
-            transcript_data["title"] = input_data.title
-        if input_data.description:
-            transcript_data["description"] = input_data.description
-        if input_data.channel:
-            transcript_data["channel"] = input_data.channel
-
         return json.dumps(transcript_data, indent=2)
 
     def _extract_json(self, text: str) -> dict:
@@ -97,9 +87,7 @@ class GraphCompiler:
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
-        text = text.strip()
-
-        return json.loads(text)
+        return json.loads(text.strip())
 
 
 compiler = GraphCompiler()
